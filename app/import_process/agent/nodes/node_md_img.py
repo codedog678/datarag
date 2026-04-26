@@ -74,9 +74,9 @@ def get_image_context(md_content: str, filename: str,context_len: int=100) -> Tu
     """
     # ![图片描述](图片地址) 正则提取 eg. ![二大爷](https://example.com/name.jpg)一个图片多个上下文不一样（出现地方不一样
     pattern=re.compile(r"!\[.*?\]\(.*?"+filename+".*?\)")
-    results=[] #存储图片多个上下文 项目里暴力处理只用第一个
+    results=[] #虽然一个图片可以用在多个地方  但是mineru扫出的图片用uuid命名 即使长得一样也不会重复
 
-    for match in pattern.finditer(md_content):
+    for match in pattern.finditer(md_content):#迭代器
         start,end=match.span()
         #span()返回匹配的字符串的起始索引和结束索引 
         # [start]![二大爷](https://example.com/name.jpg)[end]
@@ -135,10 +135,6 @@ def scan_images(md_content: str, images_dir_obj: Path) -> List[Tuple[str,str,Tup
 
 
 
-
-
-
-
 def node_md_img(state: ImportGraphState) -> ImportGraphState:
     """
     节点: 图片处理 (node_md_img)
@@ -161,4 +157,31 @@ def node_md_img(state: ImportGraphState) -> ImportGraphState:
         logger.info(f"[{function_name}] 图片文件夹不存在，直接返回状态")
         return state
     targets=scan_images(md_content,images_dir_obj)
+
     return state
+
+
+if __name__ == "__main__":
+    """本地测试入口：单独运行该文件时，执行MD图片处理全流程测试"""
+    from app.utils.path_util import PROJECT_ROOT
+    logger.info(f"本地测试 - 项目根目录：{PROJECT_ROOT}")
+
+    # 测试MD文件路径（需手动将测试文件放入对应目录）
+    test_md_name = os.path.join(r"output\hak180产品安全手册", "hhak180产品安全手册.md")
+    test_md_path = os.path.join(PROJECT_ROOT, test_md_name)
+
+    # 校验测试文件是否存在
+    if not os.path.exists(test_md_path):
+        logger.error(f"本地测试 - 测试文件不存在：{test_md_path}")
+        logger.info("请检查文件路径，或手动将测试MD文件放入项目根目录的output目录下")
+    else:
+        # 构造测试状态对象，模拟流程入参
+        test_state = {
+            "md_path": test_md_path,
+            "task_id": "test_task_123456",
+            "md_content": ""
+        }
+        logger.info("开始本地测试 - MD图片处理全流程")
+        # 执行核心处理流程
+        result_state = node_md_img(test_state)
+        logger.info(f"本地测试完成 - 处理结果状态：{result_state}")
