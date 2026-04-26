@@ -52,7 +52,7 @@ def node_entry(state: ImportGraphState) -> ImportGraphState:
     file_title = os.path.basename(local_file_path).rsplit('.', 1)[0]
     state['file_title'] = file_title
     #3. 结束节点的日志输出 节点+核心参数
-    logger.info(f">>> [{function_name}] 执行完毕！现在的状态是: {state}")
+    logger.info(f">>> [{function_name}] 执行完毕！现在的状态是:{format_state(state)}")
     add_done_task(state['task_id'],function_name) 
 
     return state
