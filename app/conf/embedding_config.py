@@ -6,13 +6,14 @@ from dotenv import load_dotenv
 # 提前加载.env配置文件（保持和原代码一致，只需执行一次）
 load_dotenv()
 
-# 定义Embedding配置（适配BGE-M3的所有配置，类名embedding_config）
+# 定义Embedding配置（适配BGE-M3的所有配置，支持本地模型和API模式）
 @dataclass
 class EmbeddingConfig:
     bge_m3_path: str  # 本地模型路径
     bge_m3: str       # 模型仓库标识
     bge_device: str   # 运行设备(cuda:0/cpu)
     bge_fp16: bool    # 是否开启半精度（1=True/0=False）
+    use_api: bool     # 是否使用API模式
 
 # 实例化配置对象，和原代码lm_config风格保持一致
 embedding_config = EmbeddingConfig(
@@ -20,5 +21,6 @@ embedding_config = EmbeddingConfig(
     bge_m3=os.getenv("BGE_M3"),
     bge_device=os.getenv("BGE_DEVICE"),
     # 特殊处理：将.env中的1/0转为布尔值，兼容常见的数字/字符串格式
-    bge_fp16=os.getenv("BGE_FP16") in ("1", "True", "true", 1)
+    bge_fp16=os.getenv("BGE_FP16") in ("1", "True", "true", 1),
+    use_api=os.getenv("BGE_M3_USE_API") in ("true", "True", "1", 1)
 )

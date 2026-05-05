@@ -1,6 +1,7 @@
 from pymilvus.model.hybrid import BGEM3EmbeddingFunction
 from app.core.logger import logger
 from app.conf.embedding_config import embedding_config
+from app.lm.bge_m3_api import generate_bge_m3_embeddings_api
 
 # 模型单例对象，避免重复初始化
 _bge_m3_ef = None
@@ -50,7 +51,7 @@ def get_bge_m3_ef():
 
 def generate_embeddings(texts):
     """
-    为文本列表生成稠密+稀疏混合向量嵌入（模型原生L2归一化）
+    为文本列表生成向量嵌入（支持本地模型和API模式）
     :param texts: 要生成嵌入的文本列表，单文本也需封装为列表
     :return: 字典格式的向量结果，key为dense/sparse，对应嵌套列表/字典列表
     :raise: 向量生成过程中的异常，由调用方捕获处理
@@ -60,11 +61,24 @@ def generate_embeddings(texts):
         logger.warning("生成向量入参不合法，texts必须为非空列表")
         raise ValueError("参数texts必须是包含文本的非空列表")
 
-    logger.info(f"开始为{len(texts)}条文本生成混合向量嵌入")
+    # 检查是否使用API模式
+    if embedding_config.use_api:
+        logger.info(f"使用API模式为{len(texts)}条文本生成向量嵌入")
+        return generate_bge_m3_embeddings_api(texts)
+
+    logger.info(f"使用本地模型为{len(texts)}条文本生成向量嵌入")
+    '''
+    将一批文本（texts）通过 BGE‑M3 模型同时转换为稠密向量（dense）和稀疏向量（sparse），
+    并把模型输出的高效内部表示（NumPy 数组 + CSR 稀疏矩阵）转换成可以直接 JSON 序列化、
+    便于存储或 API 返回的普通 Python 对象（列表 + 字典）
+    
+    '''
     try:
         # 加载BGE-M3模型单例
         model = get_bge_m3_ef()
         # 模型编码生成向量，返回dense（稠密向量）+sparse（CSR格式稀疏向量）
+        #将输入的文本列表（例如 ["文本1", "文本2"]）送入模型，进行一次前向传播
+        #返回的 embeddings 是一个字典，包含键 "dense" 和 "sparse"
         embeddings = model.encode_documents(texts)
         logger.debug(f"模型编码完成，开始解析稀疏向量格式，共{len(texts)}条")
 
@@ -80,6 +94,8 @@ def generate_embeddings(texts):
                 embeddings["sparse"].indptr[i]:embeddings["sparse"].indptr[i + 1]
             ].tolist()
             # 构造{特征索引: 归一化权重}的稀疏向量字典
+            #使用 Python 的 zip 将两个列表配对，然后通过字典推导式生成 {列索引: 权重} 的字典
+            #只存储非零项
             sparse_dict = {k: v for k, v in zip(sparse_indices, sparse_data)}
             processed_sparse.append(sparse_dict)
 
