@@ -45,14 +45,31 @@ def node_bge_embedding(state: ImportGraphState) -> ImportGraphState:
             用户 问题 （）  向量混合检索-》向量 
             eg 华为怎么开机  华为是item_name   华为手机---》content：充电器怎么开机xxxx等等content没有主语
             所以光有content不合适 主语可能不匹配  再加上item_name可能更合适
+        2.塞多少内容？也就是批量向量化一次处理多少条文本？ 8192token 4—5一批
         '''
-        result = generate_embeddings(chunks)
-        #完善chunk的属性添加稠密和稀疏向量
+        final_chunks=[]  #存储处理完后的chunk 带有向量
+        batch_size=4  #需要运算  上下文窗口（token数）/ 块的大小（字符）
+        #03 批量向量化
+        for i in range(0, len(chunks), batch_size):
+            batch_items=chunks[i:i+batch_size]
+            #定义当前批次的字符串
+            current_texts=[]
+            for item in batch_items:
+                item_name=item.get('item_name')
+                item_content=item.get('content')
+                item_text=f"商品名称：{item_name}，商品描述：{item_content}"
+                current_texts.append(item_text)
+            #当前批次生成的向量
+            result=generate_embeddings(current_texts)
+            #给当前批次的chunk绑定向量
+            for j,chunk in enumerate(batch_items):
+                chunk_item=chunk.copy()
+                chunk_item['dense_vector']=result['dense'][j]
+                chunk_item['sparse_vector']=result['sparse'][j]
+                final_chunks.append(chunk_item)
 
-        
-        
-        # state['chunks'] = output_data
-        # logger.info(f"--- BGE-M3 向量化处理完成，共处理 {len(output_data)} 条文本切片 ---")
+        state['chunks'] = final_chunks
+        logger.info(f"--- BGE-M3 向量化处理完成，共处理 {len(final_chunks)} 条文本切片 ---")
         add_done_task(state.get("task_id", ""), current_node)
     except Exception as e:
         # 捕获节点所有异常，记录错误堆栈，不中断整体流程
