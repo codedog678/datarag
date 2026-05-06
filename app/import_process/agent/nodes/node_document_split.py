@@ -87,7 +87,8 @@ def splite_by_title(md_content:str,file_title:str)->Tuple[List[str],int,int]:
                  sections.append(
                      {"content":"\n".join(current_lines),
                       "title":current_title,
-                      "line_count":len(current_lines)}
+                      "line_count":len(current_lines),
+                      "file_title":file_title}
                  )
              current_title=line
              current_lines=[current_title] # 新章节从标题开始 不是append 应该是覆盖 标题是段落的第一个内容
@@ -100,7 +101,8 @@ def splite_by_title(md_content:str,file_title:str)->Tuple[List[str],int,int]:
         sections.append(
             {"content": "\n".join(current_lines),
              "title":current_title,
-             "line_count":len(current_lines)}
+             "line_count":len(current_lines),
+             "file_title":file_title}
         )
     #3.返回结果
     logger.info(f"完成chunks的粗切，识别到的有效标题数量：{title_count}")
