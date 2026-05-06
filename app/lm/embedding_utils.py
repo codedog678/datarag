@@ -79,6 +79,7 @@ def generate_embeddings(texts):
         # 模型编码生成向量，返回dense（稠密向量）+sparse（CSR格式稀疏向量）
         #将输入的文本列表（例如 ["文本1", "文本2"]）送入模型，进行一次前向传播
         #返回的 embeddings 是一个字典，包含键 "dense" 和 "sparse"
+        #texts是一个列表 会为每个text生成dense+sparse的向量
         embeddings = model.encode_documents(texts)
         logger.debug(f"模型编码完成，开始解析稀疏向量格式，共{len(texts)}条")
 

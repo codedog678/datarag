@@ -5,6 +5,8 @@ BGE-M3 API工具类 - 通过API方式调用BGE-M3模型
 """
 import os
 import requests
+import numpy as np
+from transformers import AutoTokenizer
 from typing import List, Dict, Any
 from app.conf.embedding_config import embedding_config
 from app.core.logger import logger
@@ -13,6 +15,26 @@ from collections import deque
 
 # API速率限制队列
 _embedding_request_times = deque()
+
+# 分词器单例对象（仅加载分词器，不加载神经网络模型，内存开销极小）
+_tokenizer = None
+
+
+def _get_tokenizer():
+    global _tokenizer
+    if _tokenizer is not None:
+        return _tokenizer
+
+    model_name = embedding_config.bge_m3_path or "BAAI/bge-m3"
+    logger.info(f"开始加载BGE-M3分词器（用于稀疏向量生成）: {model_name}")
+
+    try:
+        _tokenizer = AutoTokenizer.from_pretrained(model_name)
+        logger.success("BGE-M3分词器加载成功")
+        return _tokenizer
+    except Exception as e:
+        logger.error(f"BGE-M3分词器加载失败: {e}", exc_info=True)
+        raise
 
 
 class BGE_M3_API:
@@ -26,40 +48,43 @@ class BGE_M3_API:
         if not self.api_key:
             raise ValueError("请在.env中配置BGE_M3_API_KEY")
         
-    def _parse_sparse_vector(self, sparse_data: Any) -> Dict[int, float]:
+    def _generate_sparse_from_tokenizer(self, texts: List[str]) -> List[Dict[int, float]]:
         """
-        解析稀疏向量数据，统一转换为 {index: weight} 字典格式
-        参考 embedding_utils.py 中的稀疏向量处理方式
+        使用BGE-M3分词器在本地生成稀疏向量
+        参考 embedding_utils.py 中 CSR 矩阵的解析逻辑，模拟相同输出
         
-        :param sparse_data: API返回的稀疏向量数据
-        :return: 字典格式的稀疏向量 {特征索引: 权重}
+        :param texts: 文本列表
+        :return: 字典列表，每个字典为 {token_id: weight}
         """
-        sparse_dict = {}
-        
-        if sparse_data is None:
-            return sparse_dict
-            
-        if isinstance(sparse_data, dict):
-            # 格式1: {"indices": [...], "values": [...]}
-            if "indices" in sparse_data and "values" in sparse_data:
-                indices = sparse_data["indices"]
-                values = sparse_data["values"]
-                # 转换为 Python 原生类型（参考 embedding_utils.py 中的 .tolist() 处理）
-                for idx, val in zip(indices, values):
-                    sparse_dict[int(idx)] = float(val)
-            # 格式2: {"token_id": weight, ...} 直接是字典
+        tokenizer = _get_tokenizer()
+        processed_sparse = []
+
+        for text in texts:
+            encoding = tokenizer(text, add_special_tokens=False)
+            token_ids = encoding["input_ids"]
+            tokens = tokenizer.convert_ids_to_tokens(token_ids)
+
+            unigram_weights = {}
+            for token_id, token in zip(token_ids, tokens):
+                if token.startswith('▁') or token.startswith(' '):
+                    weight = 1.0
+                elif token_id in unigram_weights:
+                    weight = unigram_weights[token_id] + 1.0
+                else:
+                    weight = 1.0
+                unigram_weights[token_id] = weight
+
+            values = np.array(list(unigram_weights.values()), dtype=np.float32)
+            l2_norm = np.linalg.norm(values)
+            if l2_norm > 1e-9:
+                normalized_values = (values / l2_norm).tolist()
             else:
-                for k, v in sparse_data.items():
-                    sparse_dict[int(k)] = float(v)
-        elif isinstance(sparse_data, list):
-            # 格式3: [[index, weight], ...] 或 [{"index": i, "value": v}, ...]
-            for item in sparse_data:
-                if isinstance(item, (list, tuple)) and len(item) == 2:
-                    sparse_dict[int(item[0])] = float(item[1])
-                elif isinstance(item, dict) and "index" in item and "value" in item:
-                    sparse_dict[int(item["index"])] = float(item["value"])
-        
-        return sparse_dict
+                normalized_values = values.tolist()
+
+            sparse_dict = {int(k): v for k, v in zip(unigram_weights.keys(), normalized_values)}
+            processed_sparse.append(sparse_dict)
+
+        return processed_sparse
     
     def generate_embeddings(self, texts: List[str]) -> Dict[str, Any]:
         """
@@ -91,9 +116,7 @@ class BGE_M3_API:
             # 构建请求体，请求稠密和稀疏向量
             data = {
                 "model": self.model,
-                "input": texts,
-                "return_dense": True,
-                "return_sparse": True
+                "input": texts
             }
             
             # 发送API请求
@@ -111,37 +134,24 @@ class BGE_M3_API:
             result = response.json()
             logger.debug(f"BGE-M3 API响应解析完成，共{len(result.get('data', []))}条结果")
             
-            # 解析API响应，格式与 embedding_utils.py 保持一致
             dense_embeddings = []
-            sparse_embeddings = []
-            
             for item in result.get("data", []):
-                # 解析稠密向量 - 转为列表格式（参考 embedding_utils.py: emb.tolist()）
                 if "embedding" in item and item["embedding"] is not None:
                     dense_embeddings.append(item["embedding"])
                 else:
-                    # 如果没有稠密向量，添加空列表
-                    dense_embeddings.append([])
-                
-                # 解析稀疏向量 - 转为 {index: weight} 字典格式
-                sparse_dict = {}
-                if "sparse" in item and item["sparse"] is not None:
-                    sparse_dict = self._parse_sparse_vector(item["sparse"])
-                sparse_embeddings.append(sparse_dict)
-            
-            # 验证稠密和稀疏向量数量一致
-            if len(dense_embeddings) != len(sparse_embeddings):
-                logger.warning(f"稠密向量数量({len(dense_embeddings)})与稀疏向量数量({len(sparse_embeddings)})不一致")
-            
+                    raise Exception("API响应中缺少稠密向量数据")
+
+            logger.debug(f"稠密向量解析完成，共{len(dense_embeddings)}条，开始生成稀疏向量")
+            sparse_embeddings = self._generate_sparse_from_tokenizer(texts)
+
             logger.debug(
-                f"BGE-M3 API嵌入生成完成，稠密向量：{len(dense_embeddings)}, "
+                f"BGE-M3向量生成完成，稠密向量：{len(dense_embeddings)}, "
                 f"稀疏向量：{len(sparse_embeddings)}"
             )
-            
-            # 返回与 embedding_utils.py 完全一致的格式
+
             result = {
-                "dense": dense_embeddings,      # 嵌套列表，与输入文本一一对应
-                "sparse": sparse_embeddings     # 字典列表，与输入文本一一对应
+                "dense": dense_embeddings,
+                "sparse": sparse_embeddings
             }
             
             logger.success(f"{len(texts)}条文本向量生成完成（API模式），格式已适配工业级使用")
