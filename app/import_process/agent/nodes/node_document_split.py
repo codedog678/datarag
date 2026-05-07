@@ -9,7 +9,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 #langchain的文本切割器！！！
 
 # 项目内部工具/状态/日志导入（保持原有路径）
-from app.utils.task_utils import add_running_task
+from app.utils.task_utils import add_done_task, add_running_task
 from app.import_process.agent.state import ImportGraphState
 from app.core.logger import logger  # 项目统一日志工具，核心替换print
 
@@ -265,7 +265,7 @@ def node_document_split(state: ImportGraphState) -> ImportGraphState:
         raise 
     finally:
         logger.info(f"<<< [{function_name}] 执行完毕！现在的状态是: {state}")
-        add_running_task(state['task_id'],function_name,True) #任务结束 前端的sse推送
+        add_done_task(state['task_id'],function_name,True) #任务结束 前端的sse推送
     return state 
 
     
