@@ -124,6 +124,8 @@ async def history(session_id: str,limit: int = 10):
     # items=[]
     # for chat in chats:
     #     items.append(chat)
+
+
     return {
         'session_id':session_id,
         'items':chats

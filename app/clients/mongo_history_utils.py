@@ -208,6 +208,15 @@ def get_recent_messages(session_id: str, limit: int = 10) -> List[Dict[str, Any]
         # find(query)：获取符合条件的游标（惰性加载，不立即查询）
         # sort("ts", ASCENDING)：按ts字段升序（从旧到新），适配LLM上下文顺序
         # limit(limit)：限制返回的最大条数
+        '''
+        MongoDB find() 返回的原始文档里，每条记录都带有 _id: ObjectId(...) 字段。
+        这个 原始列表 被整个塞进了 state['history_chat'] ，所以 state 里就有了 ObjectId 对象。
+        get_recent_messages()  →  返回带 ObjectId._id 的原始 MongoDB 文档列表
+         ↓
+        deal_list()            →  state['history_chat'] = history_chat （原始文档整存进去）
+         ↓
+        json.dumps(state)      →  遇到 history_chat 里文档的 _id 字段 → ObjectId 不可序列化 → 报错 
+        '''
         cursor = mongo_tool.chat_message.find(query).sort("ts", ASCENDING).limit(limit)
         # 将游标转为列表，触发实际数据库查询，获取所有符合条件的文档
         messages = list(cursor)
