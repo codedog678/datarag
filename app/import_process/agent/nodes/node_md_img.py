@@ -77,7 +77,7 @@ def get_image_context(md_content: str, filename: str,context_len: int=100) -> Tu
     :return: 包含图片上下文的元组（上文，下文）
     """
     # ![图片描述](图片地址) 正则提取 eg. ![二大爷](https://example.com/name.jpg)一个图片多个上下文不一样（出现地方不一样
-    pattern=re.compile(r"!\[.*?\]\(.*?"+filename+".*?\)")
+    pattern=re.compile(r"!\[.*?\]\(.*?"+re.escape(filename)+".*?\)")
     results=[] #虽然一个图片可以用在多个地方  但是mineru扫出的图片用uuid命名 即使长得一样也不会重复
 
     for match in pattern.finditer(md_content):#迭代器
@@ -183,9 +183,16 @@ def get_img_summary(targets: List[Tuple[str,str,Tuple[str,str]]],stem:str) -> Di
             )
         ]
         #02.3调用模型接口 得到图片描述
-        response=vm_model.invoke(messages)
-        summary=response.content.strip().replace("\n","")
-        summaries[filename]=summary
+        try:
+            response=vm_model.invoke(messages)
+            summary=response.content.strip().replace("\n","")
+            summaries[filename]=summary
+        except LangChainException as e:
+            logger.error(f"图片摘要生成失败（LangChain框架异常）：{filename}，错误信息：{str(e)}")
+            summaries[filename]="图片描述"
+        except Exception as e:
+            logger.error(f"图片摘要生成失败（系统异常）：{filename}，错误信息：{str(e)}")
+            summaries[filename]="图片描述"
     logger.info(f"图片描述生成完成")
     return summaries
 
@@ -229,9 +236,10 @@ def upload_and_replace_images(md_content: str,stem:str,summaries:Dict[str,str],t
                 bucket_name= minio_config.bucket_name,
                 object_name= f"{minio_config.minio_img_dir}/{stem}/{filename}",
                 file_path= image_url,
-                content_type= "image/jpeg" )
+                content_type= f"image/{os.path.splitext(image_url)[1][1:]}" )
             #记录图片url:协议+端点+桶名+对象名
-            images_url[filename]=f"{minio_config.minio_secure}://{minio_config.endpoint}/{minio_config.bucket_name}/{minio_config.minio_img_dir}/{stem}/{filename}"
+            protocol="https" if minio_config.minio_secure else "http"
+            images_url[filename]=f"{protocol}://{minio_config.endpoint}/{minio_config.bucket_name}/{minio_config.minio_img_dir}/{stem}/{filename}"
             logger.info(f"上传图片{filename}到minio成功，url为：{images_url[filename]}")
         except Exception as e:
             logger.error(f"上传图片{filename}到minio失败：{e}")
@@ -249,7 +257,7 @@ def upload_and_replace_images(md_content: str,stem:str,summaries:Dict[str,str],t
     #4.替换MD内容中的本地图片引用为MinIO URL
     # ![xx](图片地址/filename) -》 ![summary](minio图片url) 正则替换
     for filename,(summary,url) in image_infos.items():
-        pattern=re.compile(r"!\[.*?\]\("+filename+".*?\)")
+        pattern=re.compile(r"!\[.*?\]\(.*?"+re.escape(filename)+".*?\)",re.IGNORECASE)
         md_content=pattern.sub(f"![{summary}]({url})",md_content)
     logger.info(f"替换MD内容中的本地图片引用为MinIO URL完成")
     return md_content
@@ -292,6 +300,13 @@ def node_md_img(state: ImportGraphState) -> ImportGraphState:
         logger.info(f"[{function_name}] 图片文件夹不存在，直接返回状态")
         return state
     targets=scan_images(md_content,images_dir_obj)
+    if not targets:
+        logger.info(f"[{function_name}] 未检测到MD中引用的支持格式图片，跳过后续处理")
+        return state
+    minio_client=get_minio_client()
+    if not minio_client:
+        logger.warning(f"[{function_name}] MinIO客户端初始化失败，已跳过图片处理全流程")
+        return state
     summaries=get_img_summary(targets,md_path_obj.stem)
     #上传图片到minio
     new_md_content=upload_and_replace_images(md_content,md_path_obj.stem,summaries,targets)
