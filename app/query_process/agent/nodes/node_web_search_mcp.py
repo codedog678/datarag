@@ -63,7 +63,11 @@ def node_web_search_mcp(state):
         "isError": false,
         "content": [
             {
-            "text": "{\"pages\":[{\"snippet\":\"《哈哈哈哈哈 第六季》综艺在线观看- 全集大陆综艺- 口袋影视 哈哈哈哈哈第六季\",\"hostname\":\"美食\",\"hostlogo\":\"\",\"title\":\"《哈哈哈哈哈 第六季》综艺在线观看- 全集大陆综艺- 口袋影视\",\"url\":\"http://koudaxiang.com/news/1439037.html\"},{\"snippet\":\"《哈哈哈哈哈第四季》综艺全集-免费在线观看高清完整版-片库网 哈哈哈哈哈第四季\",\"hostname\":\"\",\"hostlogo\":\"https://pkwdy.com/template/pkwdy/images/favicon.ico\",\"title\":\"《哈哈哈哈哈第四季》综艺全集-免费在线观看高清完整版-片库网\",\"url\":\"http://pkwdy.com/pplayk/1510-1-1.html\"}],\"request_id\":\"f6469ac9-211a-4588-ba92-e5ca447887da\",\"tools\":[],\"status\":0}",
+            "text": "{\"pages\":
+            [{\"snippet\":\"《哈哈哈哈哈 第六季》综艺在线观看- 全集大陆综艺- 口袋影视 哈哈哈哈哈第六季\",
+            \"hostname\":\"美食\",\"hostlogo\":\"\",
+            \"title\":\"《哈哈哈哈哈 第六季》综艺在线观看- 全集大陆综艺- 口袋影视\",
+            \"url\":\"http://koudaxiang.com/news/1439037.html\"},{\"snippet\":\"《哈哈哈哈哈第四季》综艺全集-免费在线观看高清完整版-片库网 哈哈哈哈哈第四季\",\"hostname\":\"\",\"hostlogo\":\"https://pkwdy.com/template/pkwdy/images/favicon.ico\",\"title\":\"《哈哈哈哈哈第四季》综艺全集-免费在线观看高清完整版-片库网\",\"url\":\"http://pkwdy.com/pplayk/1510-1-1.html\"}],\"request_id\":\"f6469ac9-211a-4588-ba92-e5ca447887da\",\"tools\":[],\"status\":0}",
             "type": "text"
             }
         ]

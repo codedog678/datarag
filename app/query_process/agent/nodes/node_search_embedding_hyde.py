@@ -37,16 +37,16 @@ def search_embedding_hybrid(query, hyde_doc, item_names):
     #拼接问题+假设文档
     query_hyde = query + " " + hyde_doc
     #生成BGE-M3稠密+稀疏向量
-    query_embedding = generate_embeddings(query_hyde)
+    query_embedding = generate_embeddings([query_hyde])
     #生成混合检索ANNSearchRequest
     reqs=create_hybrid_search_requests(
-        query_embedding["dense"][0], 
+        query_embedding["dense"][0],
         query_embedding["sparse"][0],
-        expr=f'item_name in {[f"'{name}'" for name in item_names]}')
+        expr=f'item_name in [{", ".join(chr(34) + name + chr(34) for name in item_names)}]')
     #进行混合查询处理
     milvus_client = get_milvus_client()
     results = hybrid_search(
-        milvus_client=milvus_client,
+        client=milvus_client,
         reqs=reqs,  
         collection_name=milvus_config.chunks_collection,
         ranker_weights=(0.8,0.2),

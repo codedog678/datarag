@@ -6,7 +6,6 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.middleware.cors import CORSMiddleware
-from app.clients.mongo_history_utils import get_recent_history
 from app.query_process.agent.state import create_default_state
 from app.utils.path_util import PROJECT_ROOT
 from app.utils.task_utils import *
@@ -120,7 +119,7 @@ async def stream(session_id: str, request: Request):
 
 @app.get("/history/{session_id}")
 async def history(session_id: str,limit: int = 10):
-    chats=get_recent_history(session_id,limit)
+    chats=get_recent_messages(session_id,limit)
     # items=[]
     # for chat in chats:
     #     items.append(chat)
@@ -139,3 +138,6 @@ async def delete_history(session_id: str):
         'delete_count':delete_count,
         'message':f'{session_id}历史记录已清空'
     }
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="127.0.0.1", port=8001)

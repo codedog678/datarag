@@ -133,7 +133,13 @@ def node_rerank(state):
     #3.启动算法进行防断崖处理 以及 topk处理
     final_doc_list=topk_doc_list(reranker_list)
     #4.结果装到state中
-    state['reranked_docs']=final_doc_list 
+    #展平嵌套结构：将 {doc:{text,source,title,...}, score:x} 扁平化为 {text,source,title,...,score:x}
+    flat_list=[]
+    for item in final_doc_list:
+        flat_doc=item.get('doc',{})
+        flat_doc['score']=item.get('score',0.0)
+        flat_list.append(flat_doc)
+    state['reranked_docs']=flat_list 
 
     add_done_task(state['session_id'], sys._getframe().f_code.co_name, state.get("is_stream"))
     return state

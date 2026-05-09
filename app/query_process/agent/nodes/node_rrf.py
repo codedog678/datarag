@@ -19,7 +19,7 @@ def reciprocal_rank_fusion(source_with_weight: List[Tuple[List[Dict[str, Any]], 
         #循环处理每个文档
         for rank,doc in enumerate(source,start=1):
             #获取chunk_id
-            #!!! 注意：这里的 chunk_id 可能是 id 字段，也可能是 entity.chunk_id 字段
+            #!!! 注意：这里的 chunk_id 可能是 id 字段，也可能是 entity.chunk_id 字段 不然会少结果
             chunk_id=doc.get('entity',{}).get('chunk_id') or doc.get('id')
             #计算得分
             score_dict[chunk_id]=score_dict.get(chunk_id,0)+(1.0/(60+rank))*weight

@@ -172,7 +172,7 @@ def deal_list(item_results,history_chat,state,rewritten_query):
         #2.1 更新聊天记录 item_names-》confirmed_item_names
         #2.2 更新state状态
         state['item_names']=confirmed_item_names
-        state['rewrite_query']=rewritten_query
+        state['rewritten_query']=rewritten_query
         state['history_chat']=history_chat
         if 'answer' in state:
             del state['answer']
@@ -204,7 +204,7 @@ def node_item_name_confirm(state):
     4.向量库查询
     5.对分 分类处理 A确认集合  B可选集合
     6.处理确认和可选集合  有确认 则直接返回确认结果  无确认有可选 则返回可选集合  无确认无可选 则answer赋值（配和图结构）
-    7.补充state状态  item_name  rewrite_query  history
+    7.补充state状态  item_name  rewritten_query  history
     输入：state['original_query'] 原始用户问题
     输出：更新 state['item_names']
     """
@@ -236,13 +236,13 @@ def node_item_name_confirm(state):
     #     save_chat_message(state["session_id"], 
     #                       role="assistant",
     #                       text=state['answer'],
-    #                       rewritten_query=state.get("rewrite_query"),
+    #                       rewritten_query=state.get("rewritten_query"),
     #                       )
     #2.保存当前次的聊天记录
     message_id=save_chat_message(state["session_id"], 
                       role="system", 
                       text=state["original_query"],
-                      rewritten_query=state.get("rewrite_query", ''),
+                      rewritten_query=state.get("rewritten_query", ''),
                       item_names=state.get("item_names", []),
                       image_urls=state.get("image_urls", []),)
 

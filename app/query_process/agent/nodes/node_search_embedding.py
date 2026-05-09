@@ -1,4 +1,4 @@
-from app.query_process.agent.state import ImportGraphState
+from app.query_process.agent.state import QueryGraphState
 import sys
 import sys
 import os
@@ -36,20 +36,20 @@ def node_search_embedding(state):
     item_names = state["item_names"]
 
     #2.用户问题向量化 稀疏+稠密
-    embeddings = generate_embeddings(rewritten_query)
+    embeddings = generate_embeddings([rewritten_query])
     dense_vector, sparse_vector = embeddings['dense'][0], embeddings['sparse'][0]
     #3.向量数据库混合查询
     #3.1创建混合查询请求  item_names过滤查询+稠密+稀疏混合查询
     #expr是混合查询的混合条件
     search_requests = create_hybrid_search_requests(
-        dense_vector=dense_vector, 
-        sparse_vector=sparse_vector, 
-        expr=f'item_name in {[f"'{name}'" for name in item_names]}')
+        dense_vector=dense_vector,
+        sparse_vector=sparse_vector,
+        expr=f'item_name in [{", ".join(chr(34) + name + chr(34) for name in item_names)}]')
     
     #3.2执行混合查询请求
     milvus_client = get_milvus_client()
     results = hybrid_search(
-        milvus_client=milvus_client,
+        client=milvus_client,
         reqs=search_requests,  
         collection_name=milvus_config.chunks_collection,
         ranker_weights=(0.8,0.2),

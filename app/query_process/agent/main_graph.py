@@ -47,4 +47,4 @@ builder.add_edge('node_rrf','node_rerank')
 builder.add_edge('node_rerank','node_answer_output')
 builder.add_edge('node_answer_output',END)
 
-query_graph = builder.compile()
+query_app = builder.compile()
