@@ -201,6 +201,8 @@ def node_answer_output(state: QueryGraphState) -> QueryGraphState:
 
   #1. 判断state 中的answer是否已经存在，如果存在直接输出answer中的答案，注意判断是否需要流式输出需要则流式输出
   answer_exist=check_answer_exist(state)
+  images_urls=[]
+  answer=""
   if not answer_exist:
     #没有 则加载提示词
     prompt=load_prompt_answer_output(state)
@@ -208,9 +210,12 @@ def node_answer_output(state: QueryGraphState) -> QueryGraphState:
     answer=generate_answer(state, prompt)
     #图片处理
     images_urls=extract_images(state)
-    #返回图片 和流式没有关系 流式不流失 都要返回图片
-  if images_urls:
-    push_to_session(state['session_id'], SSEEvent.FINAL, {"answer": answer, "status": "completed", "image_urls": images_urls})
+  else:
+    #answer已存在，从state中取出用于FINAL事件
+    answer=state.get("answer","")
+    images_urls=extract_images(state)
+  #始终发送FINAL事件，确保前端能收到完整响应
+  push_to_session(state['session_id'], SSEEvent.FINAL, {"answer": answer, "status": "completed", "image_urls": images_urls})
   
   #添加聊天记录
   writer_history(state)

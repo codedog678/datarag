@@ -46,6 +46,7 @@ def extract_item_names_and_rewrite_query(original_query, history_chat):
     #3.结果解析
     #content = response[0].content 这里错了
     content = response.content
+    logger.info(f"[LLM提取商品名] 原始返回：{content}")
     if content.startswith("```json"):
         content=content.replace("```json","").replace("```","")
     dict_data=json.loads(content)
@@ -131,7 +132,8 @@ def classify_item_names(query_milvus_results):
         matches=item_name.get('matches', [])
         #排序
         matches.sort(key=lambda x: x['score'], reverse=True)
-        high_score_list=[x for x in matches if x['score']>=0.85]
+        logger.info(f"[分类商品名] 提取='{extracted}' 匹配结果：{[(m['item_name'],round(m['score'],3)) for m in matches]}")
+        high_score_list=[x for x in matches if x['score']>=0.75]
         mid_score_list=[x for x in matches if x['score']>=0.6]
 
         #"高分命中"做去歧义处理
@@ -221,6 +223,7 @@ def node_item_name_confirm(state):
     rewritten_query=itemnames_and_requery.get('rewritten_query', state["original_query"])
     #4.向量库查询
     #参数：item_names 模型给出的 但不一定与向量数据库完全相同
+    item_results={'confirmed_item_names':[],'optional_item_names':[]}
     if len(item_names)>0:
         #查询 item_names是一个列表 提取可能不止一个[1,2...] 那么查询也就不止查一次
         #返回：[extracte:(模型提取的item_name),matches:[{item_name:名字（数据库搜到的），score:分数（模型给出的）},{..}]]
