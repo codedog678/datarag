@@ -214,12 +214,10 @@ def node_answer_output(state: QueryGraphState) -> QueryGraphState:
     #answer已存在，从state中取出用于FINAL事件
     answer=state.get("answer","")
     images_urls=extract_images(state)
+   #添加聊天记录
+  writer_history(state)
+  add_done_task(state['session_id'], sys._getframe().f_code.co_name, state.get("is_stream"))
   #始终发送FINAL事件，确保前端能收到完整响应
   push_to_session(state['session_id'], SSEEvent.FINAL, {"answer": answer, "status": "completed", "image_urls": images_urls})
   
-  #添加聊天记录
-  writer_history(state)
-
-
-
-  add_done_task(state['session_id'], sys._getframe().f_code.co_name, state.get("is_stream"))
+ 
