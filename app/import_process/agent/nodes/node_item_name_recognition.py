@@ -3,7 +3,7 @@ import sys
 from typing import List, Dict, Any, Tuple
 
 # 导入Milvus客户端（向量数据库核心操作）、数据类型枚举（定义集合Schema）
-from pymilvus import MilvusClient, DataType
+from pymilvus import  DataType
 # 导入LangChain消息类（标准化大模型对话消息格式）
 from langchain_core.messages import SystemMessage, HumanMessage
 
@@ -80,8 +80,8 @@ def build_context(chunks: List[Dict[str,Any]]) -> str:
     total_chars = 0
     #遍历切片
     for i,chunk in enumerate(chunks[:DEFAULT_ITEM_NAME_CHUNK_K],start=1):
-        chunk_title = chunk.get("title","")
-        chunk_content = chunk.get("content","")
+        chunk_title = chunk.get("title","")  #层级标题 
+        chunk_content = chunk.get("content","")  #某个标题下的内容
         # # 截取内容处理
         # if len(chunk_content) + total_chars > SINGLE_CHUNK_CONTENT_MAX_LEN:
         #     chunk_content = chunk_content[:SINGLE_CHUNK_CONTENT_MAX_LEN - total_chars]
@@ -123,6 +123,7 @@ def update_chunks_and_state(state: ImportGraphState,item_name: str,chunks: List[
     chunks->{item_name: item_name}
     '''
     state["item_name"] = item_name
+    #给chunk添加item_name字段 
     for chunk in chunks:
         chunk["item_name"] = item_name
     state["chunks"] = chunks
@@ -141,7 +142,6 @@ def generate_two_embeddings(item_name: str) -> Tuple[List[float], Dict[str, floa
     result = generate_embeddings([item_name])
     dense_vector = result["dense"][0]
     sparse_vector = result["sparse"][0]
-    logger.info(f"API返回的稀疏向量: {result['sparse'][0]}")
     return dense_vector, sparse_vector
 
 def save_to_milvus(dense_vector: List[float], sparse_vector: Dict[str, float], item_name: str,file_title: str) -> None:
@@ -150,8 +150,6 @@ def save_to_milvus(dense_vector: List[float], sparse_vector: Dict[str, float], i
     '''
     #1.获取单例Milvus客户端
     milvus_client = get_milvus_client()
-    # 从环境变量读取Milvus核心配置，与MilvusConfig配置类保持一致
-    milvus_uri = os.environ.get("MILVUS_URL")
     collection_name = os.environ.get("ITEM_NAME_COLLECTION")
     #2.判断是否存在集合（表），不存在则创建
     if not milvus_client.has_collection(collection_name=collection_name):
@@ -244,8 +242,6 @@ def save_to_milvus(dense_vector: List[float], sparse_vector: Dict[str, float], i
 
 def node_item_name_recognition(state: ImportGraphState) -> ImportGraphState:
     """
-    节点: 主体识别 (node_item_name_recognition)
-    为什么叫这个名字: 识别文档核心描述的物品/商品名称 (Item Name)。
     未来要实现:
     1. 取文档前几段内容。
     2. 调用 LLM 识别这篇文档讲的是什么东西 (如: "Fluke 17B+ 万用表")。
@@ -267,7 +263,7 @@ def node_item_name_recognition(state: ImportGraphState) -> ImportGraphState:
         item_name = call_llm(context,file_title)
 
         # 4. 修改state中chunks->item_name 
-        #期待的chunks结构：[{title parent_title part content item_name（给这部分赋值） file_name}]
+        #期待的chunks结构：[{title parent_title part content item_name（添加这个字段） file_title}]
         update_chunks_and_state(state,item_name,chunks)
 
         # 5. item_name 向量化(稀疏 稠密)

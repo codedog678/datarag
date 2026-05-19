@@ -10,20 +10,48 @@ def reciprocal_rank_fusion(source_with_weight: List[Tuple[List[Dict[str, Any]], 
     :param source_with_weight: 每个元素为 (文档列表, 权重) 的元组列表
     :return: 融合后的文档列表
     """
+
+    '''
+    milvus 返回结果的结构
+    results = [
+    [  # results[0] —— 第一个查询的结果
+        {
+            "id": 12345,              # ← 主键（Milvus 自带的 id 字段）
+            "distance": 0.87,          # ← 相似度分数
+            "entity": {                # ← output_fields 里的内容
+                "chunk_id": 12345,
+                "content": "...",
+                "item_name": "...",
+                "file_title": "...",
+                ...
+            }
+        },
+        {
+            "id": 12346,
+            "distance": 0.82,
+            "entity": {
+                "chunk_id": 12346,
+                ...
+            }
+        }
+    ]
+]
+    
+    '''
     #准备两个容器 一个记录历史得分 一个记录chunk片段
-    score_dict={}   #key:chunk_id value:score
+    score_dict={}   #key:chunk_id value:累计得分
     #一个记录chunk片段
-    chunk_dict={} 
-    #循环处理每个集合中的数据
-    for source,weight in source_with_weight:
+    chunk_dict={}   #key:chunk_id value:文档原文
+    #循环处理每个集合中的数据 
+    for source,weight in source_with_weight:#遍历每一路检索源
         #循环处理每个文档
-        for rank,doc in enumerate(source,start=1):
+        for rank,doc in enumerate(source,start=1):#该路检索源得到的文档
             #获取chunk_id
-            #!!! 注意：这里的 chunk_id 可能是 id 字段，也可能是 entity.chunk_id 字段 不然会少结果
+            #两个是一个东西 一个chunk_id 一个id 防御性编程
             chunk_id=doc.get('entity',{}).get('chunk_id') or doc.get('id')
-            #计算得分
+            #计算得分 chunk_id相同的文档得分累加
             score_dict[chunk_id]=score_dict.get(chunk_id,0)+(1.0/(60+rank))*weight
-            chunk_dict[chunk_id]=doc 
+            chunk_dict[chunk_id]=doc #如果不同源 内容一样 覆盖就行
     #融合和排序
     merged=[]
     for chunk_id,score in score_dict.items():
@@ -35,7 +63,7 @@ def reciprocal_rank_fusion(source_with_weight: List[Tuple[List[Dict[str, Any]], 
     merged.sort(key=lambda x:x['score'],reverse=True)
     #截断
     merged=merged[:top_k]
-    #获取chunk的排名数据
+    #获取chunk的排名数据  [{chunk:文档内容，score:分数}....]
     rank_chunks=[item['chunk'] for item in merged]
     logger.info(f"RRF 融合后结果：{rank_chunks}")
     return rank_chunks
@@ -46,7 +74,7 @@ def node_rrf(state):
     RRF (Reciprocal Rank Fusion) 倒数排名融合节点
     
     功能：
-    将来自不同检索源（如 Embedding 检索、HyDE 检索、知识图谱检索等）的结果进行融合排序。
+    将来自不同检索源（如 Embedding 检索、HyDE 检索）的结果进行融合排序。
     RRF 是一种无需训练的算法，仅根据文档在不同列表中的排名来计算最终得分。
     
     步骤：

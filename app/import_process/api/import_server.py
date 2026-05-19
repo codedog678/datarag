@@ -97,6 +97,11 @@ def run_import_graph(task_id: str, local_file_path: str, local_dir: str=None):
         init_state["local_file_path"] = local_file_path  # 设置本地文件路径
         init_state["local_dir"] = local_dir  # 设置本地输出目录（可选）
         
+        #stream模式：实时获取每个节点的执行结果 生成器，每次 yield {节点名: state增量}
+        #后端内部：逐节点执行，每完成一个节点 yield 一次 只是 Python 生成器的遍历，前端完全感知不到
+        #.stream() 解决的问题：LangGraph 图执行器如何逐节点返回结果
+        #task_utils 解决的问题：这些结果怎么存起来，让前端随时可以查询 
+        #前端感知：把进度实时推给浏览器 需要一个传输机制把后端的事件送到前端  导入用的是前端轮询  查询用的是sse流式输出
         for event in kb_import_app.stream(init_state):
             for node_name,result in event.items():
                 logger.info(f'节点{node_name}已经完成执行，执行结果为{result}')
@@ -135,6 +140,7 @@ async def upload_file(files: List[UploadFile] = File(...),
         #文件的local_file_path/output/当天日期/uuid（task_id）/文件名
         local_file_path=dir_path / file.filename
         #上传的文件写入到local_file_path
+        #保存文件 同步 因为很快就可以完成
         with open(local_file_path, 'wb') as f:
             shutil.copyfileobj(file.file, f)
             # 分块复制，内存友好，避免一次读取大文件导致内存不足
@@ -144,6 +150,7 @@ async def upload_file(files: List[UploadFile] = File(...),
         # 参1：func 要执行的函数
         # 参2：*args 要传递给 func 的参数 位置参数
         # 参3：**kwargs 要传递给 func 的参数 关键字参数
+        #注册后台任务 不会立刻执行
         background_tasks.add_task(run_import_graph, 
                                   task_id, 
                                   str(local_file_path), 
@@ -152,6 +159,7 @@ async def upload_file(files: List[UploadFile] = File(...),
         add_done_task(task_id, node_name="upload_file")
 
     #4.最终返回结果
+    #但是立刻返回响应给前端 之后才在后台线程执行run_import_graph 不然前端很久才能收到响应
     return {
         "code": 200,
         "message": f"完成文件上传，上传文件数: {len(files)}",

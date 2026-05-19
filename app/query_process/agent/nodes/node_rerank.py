@@ -60,7 +60,7 @@ def rerank_doc_list(doc_list,state):
     #normalize=True 归一化处理  默认是False  归一化处理后  分数范围在[0,1]之间
     rerank_scores=rerank.compute_score(questions_pairs,normalize=True)
     #5.将原有数据添加对应的分数
-    #返回值[xxx,xxx,xxx,xx....]
+    #返回值[xxx,xxx,xxx,xx....] 按照顺序对每个元素的分数 doc是包含所有字段的字典
     doc_list_with_scores=[{'doc':doc,'score':score} for doc,score in zip(doc_list,rerank_scores)]
     #6.根据分数进行排序
     doc_list_with_scores.sort(key=lambda x: x['score'], reverse=True)
@@ -85,7 +85,7 @@ def topk_doc_list(reranker_list):
     topk=min(max_topk,len(reranker_list))
 
     if topk>min_topk:
-        #目的是实现 相邻两个元素的比较 （双指针）  min_topK是个数 现在要找下标
+        #目的是实现 相邻两个元素的比较 （双指针）  min_topK是个数 现在要找下标 分数高的就要保留下来
         #index 最后一个值必须是 倒数第二个元素的索引 ，否则 index+1 会越界。
         for index in range(min_topk-1,topk-1):
             #双指针 前后
@@ -93,7 +93,7 @@ def topk_doc_list(reranker_list):
             item2=reranker_list[index+1].get('score',0.0)
             #分母不能为0
             gap=item1-item2
-            rel=gap/(abs(item1)+1e-6)
+            rel=gap/(abs(item1)+1e-6)   #防止除0 相对断崖
             if gap>=gap_abs or rel>=gap_ratio:
                 #断崖
                 logger.info(f"数据集合{index}和{index+1}发生了断崖，结束循环")
@@ -103,8 +103,6 @@ def topk_doc_list(reranker_list):
     logger.info(f"topk截取长度：{topk}")
     logger.info(f"topk结果：{topk_doc_list_list}")
     return topk_doc_list_list
-
-    
 
 
 def node_rerank(state):
@@ -116,17 +114,6 @@ def node_rerank(state):
 
     add_running_task(state["session_id"], sys._getframe().f_code.co_name, state.get("is_stream"))
     #1.非同源路的结果合并  
-    '''
-    rrf={id:chunk_id,distance:0.x,entity:{chunk_id,content,title}}
-    mcp={snippet,title,url}
-
-    {\"snippet\":\"《哈哈哈哈哈 第六季》综艺在线观看- 全集大陆综艺- 口袋影视 哈哈哈哈哈第六季\",
-            \"hostname\":\"美食\",\"hostlogo\":\"\",
-            \"title\":\"《哈哈哈哈哈 第六季》综艺在线观看- 全集大陆综艺- 口袋影视\",
-            \"url\":\"http://koudaxiang.com/news/1439037.html\"},{\"snippet\":\"《哈哈哈哈哈第四季》综艺全集-免费在线观看高清完整版-片库网 哈哈哈哈哈第四季\",\"hostname\":\"\",\"hostlogo\":\"https://pkwdy.com/template/pkwdy/images/favicon.ico\",\"title\":\"《哈哈哈哈哈第四季》综艺全集-免费在线观看高清完整版-片库网\",\"url\":\"http://pkwdy.com/pplayk/1510-1-1.html\"}],\"request_id\":\"f6469ac9-211a-4588-ba92-e5ca447887da\",\"tools\":[],\"status\":0}",
-            "type": "text"
-            }
-    '''
     doc_list=merge_rrf_mcp(state)
     #2.启用reranker模型进行打分
     reranker_list=rerank_doc_list(doc_list,state)

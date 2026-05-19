@@ -1,6 +1,7 @@
 from pymilvus.model.hybrid import BGEM3EmbeddingFunction
 from app.core.logger import logger
 from app.conf.embedding_config import embedding_config
+import numpy as np
 from app.lm.bge_m3_api import generate_bge_m3_embeddings_api
 
 # 模型单例对象，避免重复初始化
@@ -94,10 +95,15 @@ def generate_embeddings(texts):
             sparse_data = embeddings["sparse"].data[
                 embeddings["sparse"].indptr[i]:embeddings["sparse"].indptr[i + 1]
             ].tolist()
-            # 构造{特征索引: 归一化权重}的稀疏向量字典
-            #使用 Python 的 zip 将两个列表配对，然后通过字典推导式生成 {列索引: 权重} 的字典
-            #只存储非零项
-            sparse_dict = {k: v for k, v in zip(sparse_indices, sparse_data)}
+            # L2归一化稀疏向量权重，确保IP内积检索时同一文本得分接近1.0
+            values = np.array(sparse_data, dtype=np.float32)
+            l2_norm = np.linalg.norm(values)
+            if l2_norm > 1e-9:
+                normalized_values = (values / l2_norm).tolist()
+            else:
+                normalized_values = sparse_data
+            # 构造{特征索引: 归一化权重}的稀疏向量字典，只存储非零项
+            sparse_dict = {k: v for k, v in zip(sparse_indices, normalized_values)}
             processed_sparse.append(sparse_dict)
 
         # 构造最终返回结果，稠密向量转列表（解决numpy数组不可序列化问题）

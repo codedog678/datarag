@@ -8,7 +8,6 @@ from collections import deque
 
 
 # MinIO相关依赖
-from minio import Minio
 from minio.deleteobjects import DeleteObject
 
 # 【核心改造1：移除原生OpenAI，导入LangChain工具类和多模态消息模块】
@@ -80,7 +79,8 @@ def get_image_context(md_content: str, filename: str,context_len: int=100) -> Tu
     pattern=re.compile(r"!\[.*?\]\(.*?"+re.escape(filename)+".*?\)")
     results=[] #虽然一个图片可以用在多个地方  但是mineru扫出的图片用uuid命名 即使长得一样也不会重复
 
-    for match in pattern.finditer(md_content):#迭代器
+    for match in pattern.finditer(md_content):#finditer()返回一个匹配对象的迭代器
+        #每次产出一个匹配的对象match
         start,end=match.span()
         #span()返回匹配的字符串的起始索引和结束索引 
         # [start]![二大爷](https://example.com/name.jpg)[end]
@@ -131,7 +131,7 @@ def scan_images(md_content: str, images_dir_obj: Path) -> List[Tuple[str,str,Tup
         #检查图片是否可以用
         if not is_supported_image(filename):
             continue
-        #读取上下文  外置方法
+        #读取上下文  外置方法  得到一个元组（上文，下文）
         context=get_image_context(md_content,filename)
         if not context:
             logger.warning(f"图片{filename}未在md中使用，跳过")
@@ -161,7 +161,7 @@ def get_img_summary(targets: List[Tuple[str,str,Tuple[str,str]]],stem:str) -> Di
         
         with open(image_url, 'rb') as f:
             base64_image = base64.b64encode(f.read()).decode('utf-8')  # 图片数据base64编码 b64decode解码
-        
+        #langchain格式消息列表
         messages = [
             HumanMessage(
                 content=[
@@ -218,7 +218,7 @@ def upload_and_replace_images(md_content: str,stem:str,summaries:Dict[str,str],t
     minio_client=get_minio_client()
     object_list=minio_client.list_objects(minio_config.bucket_name,
                               prefix=f"{minio_config.minio_img_dir}/{stem}/",
-                              recursive=True)
+                              recursive=True) #recursive=True 的意思是递归查找所有子目录
     #1.2调用方法进行删除
     #需要DeleteObjects参数批量删除 但现在是还不是这个对象
     delect_object_list=[DeleteObject(obj.object_name) for obj in object_list]
@@ -237,6 +237,9 @@ def upload_and_replace_images(md_content: str,stem:str,summaries:Dict[str,str],t
                 object_name= f"{minio_config.minio_img_dir}/{stem}/{filename}",
                 file_path= image_url,
                 content_type= f"image/{os.path.splitext(image_url)[1][1:]}" )
+            #根据.分割文件名 取后缀名 指定MIME类型
+            #content_type=f"image/{os.path.splitext(image_url)[1][1:]}"
+            
             #记录图片url:协议+端点+桶名+对象名
             protocol="https" if minio_config.minio_secure else "http"
             images_url[filename]=f"{protocol}://{minio_config.endpoint}/{minio_config.bucket_name}/{minio_config.minio_img_dir}/{stem}/{filename}"
@@ -281,12 +284,6 @@ def replace_md_file(md_path_obj: Path,new_md_content: str) -> str:
 def node_md_img(state: ImportGraphState) -> ImportGraphState:
     """
     节点: 图片处理 (node_md_img)
-    为什么叫这个名字: 处理 Markdown 中的图片资源 (Image)。
-    未来要实现:
-    1. 扫描 Markdown 中的图片链接。
-    2. 将图片上传到 MinIO 对象存储。
-    3. (可选) 调用多模态模型生成图片描述。
-    4. 替换 Markdown 中的图片链接为 MinIO URL。
     """
     function_name = sys._getframe().f_code.co_name
     logger.info(f">>> [{function_name}] 开始执行！现在的状态是: {state}")

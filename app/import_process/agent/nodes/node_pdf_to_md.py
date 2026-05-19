@@ -186,7 +186,9 @@ def download_zip(zip_url: str, local_dir_obj: Path, file_name: str) -> str:
     extract_target_dir.mkdir(parents=True, exist_ok=True)
     
     #4.解压ZIP文件到指定目录 内置zipfile模块
+    #zipfile.ZipFile() — 打开一个 ZIP 文件  "r "只读模式 "w "写入模式 "x "创建模式
     with zipfile.ZipFile(zip_save_path, 'r') as zip_ref:
+        #extractall() — 把 ZIP 里的所有文件解压到指定目录
         zip_ref.extractall(extract_target_dir)
     
     #5.返回解压后的md文件路径

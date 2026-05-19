@@ -30,6 +30,8 @@ def prepare_collections(state: ImportGraphState) :
             enable_dynamic_field=True,#开启动态字段 允许动态增加
         )
         #02 定义集合的字段信息 
+        #设置了 auto_id=True，插入时不需要传入chunk_id，Milvus会自动生成
+        #插入后通过 insert_result.get('ids') 获取生成的ID，再回写到chunk字典中。
         schema.add_field(
             field_name="chunk_id",
             datatype=DataType.INT64,
@@ -131,9 +133,12 @@ def insert_chunks_data(milvus_client, chunks):
         collection_name=CHUNKS_COLLECTION_NAME,    
         data=chunks,
     )
+
     insert_count=insert_result.get("insert_count",0)
     logger.info(f">>> [ 将{insert_count}条数据写入向量数据库 ]")
     #获取回显的ids
+    #获取milvus返回的ids  并将其添加到chunk中
+    #因为milvus返回的ids是自动生成的 所以需要将其添加到chunk中
     ids=insert_result.get('ids',[])
     if ids and len(ids)==len(chunks):
         for index,chunk in enumerate(chunks):

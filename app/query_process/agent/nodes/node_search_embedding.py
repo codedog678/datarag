@@ -1,7 +1,4 @@
-from app.query_process.agent.state import QueryGraphState
 import sys
-import sys
-import os
 from app.utils.task_utils import add_running_task,add_done_task
 from app.lm.embedding_utils import generate_embeddings
 from app.clients.milvus_utils import create_hybrid_search_requests,hybrid_search,get_milvus_client
@@ -39,23 +36,24 @@ def node_search_embedding(state):
     embeddings = generate_embeddings([rewritten_query])
     dense_vector, sparse_vector = embeddings['dense'][0], embeddings['sparse'][0]
     #3.向量数据库混合查询
-    #3.1创建混合查询请求  item_names过滤查询+稠密+稀疏混合查询
+    #3.1创建混合查询请求  item_names过滤查询+稠密+稀疏混合查询（区别于之前检索item_name）
     #expr是混合查询的混合条件
     search_requests = create_hybrid_search_requests(
         dense_vector=dense_vector,
         sparse_vector=sparse_vector,
         expr=f'item_name in [{", ".join(chr(34) + name + chr(34) for name in item_names)}]')
-    
+    #expr涉及到了milvus识别字段的机制，他会自动知道item_name是要过滤筛查的字段 识别出来in 识别出来值列表[...]
     #3.2执行混合查询请求
     milvus_client = get_milvus_client()
     results = hybrid_search(
         client=milvus_client,
         reqs=search_requests,  
         collection_name=milvus_config.chunks_collection,
-        ranker_weights=(0.8,0.2),
+        ranker_weights=(0.8,0.2),  #也区别于之前检索item_name的权重设置 因为content更注重语义
         norm_score=True,
         limit=5,
         output_fields=["item_name","parent_title","file_title","title","chunk_id","content"]
+        #chunk_id 是自动生成的id 是主键
         )
     
     #4.处理查询结果及赋值 embedding_chunks字段

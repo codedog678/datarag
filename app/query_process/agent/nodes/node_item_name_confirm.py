@@ -1,10 +1,8 @@
 import sys
 import os
 import json
-import logging
-from typing import List, Dict, Any, Optional
+
 from langchain_core.messages import SystemMessage, HumanMessage
-from mpmath import limit
 from app.conf.milvus_config import milvus_config
 from app.core.load_prompt import load_prompt
 from app.query_process.agent.state import QueryGraphState
@@ -18,7 +16,7 @@ from app.core.logger import logger
 
 load_dotenv(find_dotenv())
 
-def extract_item_names_and_rewrite_query(original_query, history_chat):
+def extract_item_names_and_rewrite_query(original_query, history_chat): 
     """
     从历史对话记录中提取商品名称和重写用户问题。
     输入：original_query 原始用户问题
@@ -44,17 +42,17 @@ def extract_item_names_and_rewrite_query(original_query, history_chat):
     3.返回格式的校验 （解析器）
     '''
     #3.结果解析
-    #content = response[0].content 这里错了
     content = response.content
-    logger.info(f"[LLM提取商品名] 原始返回：{content}")
     if content.startswith("```json"):
         content=content.replace("```json","").replace("```","")
+    #json.loads(content)  把字符串转换为字典
+    #json.dumps(dict_data)  把字典转换为字符串
     dict_data=json.loads(content)
     if 'item_names' not in dict_data:
         dict_data['item_names']=[]
     if 'rewritten_query' not in dict_data:
         dict_data['rewritten_query']=original_query
-    #4.封装返回
+    #4.封装返回  字典
     return dict_data
 
 def query_milvus_item_names(item_names):
@@ -87,17 +85,17 @@ def query_milvus_item_names(item_names):
             norm_score=True,  #归一化 
             )
         ''''
-        看官网的返回形式是什么样
+        看官网的返回形式是什么样 因为输出字段output_fields 定位为item_name 所以返回的结果是
         [[
            {id:xx  , distance:xx  , entity:{item_name:xx}},
            {id:xx  , distance:xx  , entity:{item_name:xx}}...
         ]]
+
         实际要的返回形式
         [{extracted:(模型提取的item_name),matches:[{item_name:名字（数据库搜到的），score:分数（模型给出的）},{..}]}]
         '''
 
         #结果解析
-        
         matches=[]
         if response and len(response)>0:
             for hit in response[0]:
@@ -121,43 +119,36 @@ def classify_item_names(query_milvus_results):
     confirmed_item_names:[],
     optional_item_names:[]}
     }
-    评分规则：0.85  0.6  （根据实际需求修改）
+    评分规则：最高分>=0.85确认，其余>=0.6可选（根据实际需求修改）
     """
     confirmed_item_names=[]
     optional_item_names=[]
-    #确定的只要一个  可选的可以多个  那就要做分数排序
-    #每一个模型提取的item_name 多个结果进行一次分类 
-    for item_name in query_milvus_results:
-        extracted=item_name.get('extracted', '')
-        matches=item_name.get('matches', [])
-        #排序
-        matches.sort(key=lambda x: x['score'], reverse=True)
-        logger.info(f"[分类商品名] 提取='{extracted}' 匹配结果：{[(m['item_name'],round(m['score'],3)) for m in matches]}")
-        high_score_list=[x for x in matches if x['score']>=0.75]
-        mid_score_list=[x for x in matches if x['score']>=0.6]
+    CONFIRM_THRESHOLD = 0.85  # 确认阈值
+    OPTIONAL_THRESHOLD = 0.6  # 可选阈值
 
-        #"高分命中"做去歧义处理
-        if len(high_score_list)==1:
-            confirmed_item_names.append(extracted)
-            continue 
-        if len(high_score_list)>1:
-            same_name_item=None
-            for item in high_score_list:
-                if item['item_name'] == extracted:
-                    same_name_item=item
-                    break
-            if not same_name_item:
-                same_name_item=high_score_list[0]
-            confirmed_item_names.append(same_name_item['item_name'])
+    for item_name in query_milvus_results:
+        matches=item_name.get('matches', [])
+        #排序 搜到的结果根据分数排序 从高到低
+        matches.sort(key=lambda x: x['score'], reverse=True)
+        logger.info(f"[分类商品名] 提取='{item_name.get('extracted', '')}' 匹配结果：{[(m['item_name'],round(m['score'],3)) for m in matches]}")
+
+        if not matches:
             continue
-    #处理可选列表
-        if len(mid_score_list)>0:
-            for item in mid_score_list[:3]:
-                optional_item_names.append(item['item_name'])
-            continue
-    #处理返回结果
+
+        #最高分够高 → 确认最高分，剩余>=0.6的作为可选
+        if matches[0]['score'] >= CONFIRM_THRESHOLD:
+            confirmed_item_names.append(matches[0]['item_name'])
+            for item in matches[1:]:
+                if item['score'] >= OPTIONAL_THRESHOLD:
+                    optional_item_names.append(item['item_name'])
+        else:
+            #没有高分 → 全部>=0.6的作为可选
+            for item in matches:
+                if item['score'] >= OPTIONAL_THRESHOLD:
+                    optional_item_names.append(item['item_name'])
+
     return {'confirmed_item_names':list(set(confirmed_item_names)),
-            'optional_item_names':list(set(optional_item_names))}   
+            'optional_item_names':list(set(optional_item_names))[:5]}   
 
 def deal_list(item_results,history_chat,state,rewritten_query):
     '''
@@ -180,7 +171,7 @@ def deal_list(item_results,history_chat,state,rewritten_query):
             del state['answer']
         logger.info(f"有确认商品，名称为：{confirmed_item_names}")
         return state
-    #3.确认集合没数据处理可选集合
+    #3.确认集合没数据处理可选集合 下一轮重写问题
     if len(optional_item_names)>0:
         option_names='、'.join(optional_item_names)
         answer=f"您好，您是想咨询以下哪个商品：{option_names}？请下次提问明确商品名称"
@@ -213,7 +204,7 @@ def node_item_name_confirm(state):
     # 记录任务开始
     add_running_task(state["session_id"], sys._getframe().f_code.co_name,state["is_stream"])
     
-    #1.获取历史对话记录
+    #1.获取历史对话记录 第一次访问chat.html前端用随机字符串+时间戳生成一个session_id 存到了localStorage
     history_chat=get_recent_messages(state["session_id"])
     
     #3.提取 item_name  利用LLM模型 重写问题
@@ -242,15 +233,13 @@ def node_item_name_confirm(state):
     #                       rewritten_query=state.get("rewritten_query"),
     #                       )
     #2.保存当前次的聊天记录
-    message_id=save_chat_message(state["session_id"], 
-                      role="system", 
+    message_id=save_chat_message(state["session_id"],
+                      role="user",
                       text=state["original_query"],
                       rewritten_query=state.get("rewritten_query", ''),
                       item_names=state.get("item_names", []),
                       image_urls=state.get("image_urls", []),)
 
-
-    
     # 记录任务结束
     add_done_task(state["session_id"], sys._getframe().f_code.co_name,state["is_stream"])
 

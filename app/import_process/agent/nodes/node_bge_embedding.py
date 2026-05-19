@@ -1,9 +1,7 @@
 import sys
-import os
-from typing import Any, List, Dict
 
 from app.import_process.agent.state import ImportGraphState
-from app.lm.embedding_utils import get_bge_m3_ef, generate_embeddings
+from app.lm.embedding_utils import generate_embeddings
 from app.utils.task_utils import add_running_task,add_done_task
 from app.core.logger import logger
 
@@ -41,14 +39,12 @@ def node_bge_embedding(state: ImportGraphState) -> ImportGraphState:
         #02 批量向量化
         '''
         1.什么内容生成向量？
-            chunks里面的每个chunk的content字段 
-            用户 问题 （）  向量混合检索-》向量 
-            eg 华为怎么开机  华为是item_name   华为手机---》content：充电器怎么开机xxxx等等content没有主语
-            所以光有content不合适 主语可能不匹配  再加上item_name可能更合适
+            chunks里面的每个chunk的content字段  
+            光有content不合适 主语可能不匹配  再加上item_name可能更合适
         2.塞多少内容？也就是批量向量化一次处理多少条文本？ 8192token 4—5一批
         '''
         final_chunks=[]  #存储处理完后的chunk 带有向量
-        batch_size=4  #需要运算  上下文窗口（token数）/ 块的大小（字符）
+        batch_size=4  #需要运算  上下文窗口（token数）/ 块的大小（字符）  8000/2000
         #03 批量向量化
         for i in range(0, len(chunks), batch_size):
             batch_items=chunks[i:i+batch_size]

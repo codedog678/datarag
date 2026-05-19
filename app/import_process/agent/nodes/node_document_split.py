@@ -42,7 +42,7 @@ def splite_by_title(md_content:str,file_title:str)->Tuple[List[str],int,int]:
     :param md_content: 输入的Markdown内容
     :param file_title: 文件标题
     :return: 切分后的章节列表、识别到的有效标题数量、MD原始文本总行数（为后续统计/日志使用）
-    [{content,title,line_count}]
+    [{content,title}]
     """
     #1.准备前置的工作
     #1.1正则
@@ -55,7 +55,7 @@ def splite_by_title(md_content:str,file_title:str)->Tuple[List[str],int,int]:
     '''
     title_pattern = r'^\s*#{1,6}\s+.+'
     
-    #1.2md_content 切割\n
+    #1.2md_content 切割\n  之后要逐行扫描
     lines = md_content.split("\n")
 
     #1.3定义临时存储变量 每次按照标题进行切分 都需要更新
@@ -87,7 +87,6 @@ def splite_by_title(md_content:str,file_title:str)->Tuple[List[str],int,int]:
                  sections.append(
                      {"content":"\n".join(current_lines),
                       "title":current_title,
-                      "line_count":len(current_lines),
                       "file_title":file_title}
                  )
              current_title=line
@@ -101,7 +100,6 @@ def splite_by_title(md_content:str,file_title:str)->Tuple[List[str],int,int]:
         sections.append(
             {"content": "\n".join(current_lines),
              "title":current_title,
-             "line_count":len(current_lines),
              "file_title":file_title}
         )
     #3.返回结果
@@ -124,6 +122,7 @@ def split_long_section(section:Dict[str,str],max_content_length:int)->List[Dict[
     #切割
     #title=标题_1 _2... | part 1 2 ...|parent_title=section.title
     sub_sections=[]
+    #执行真正的文本切割  递归尝试分隔符  返回一个切割后的字符串列表
     chunks=splitter.split_text(content)
     for idx,chunk in enumerate(chunks,start=1):
         text=chunk.strip()
@@ -150,6 +149,7 @@ def merge_short_sections(sections:List[Dict[str,str]],min_content_length:int)->L
     :param sections: 切分后的章节列表
     :param min_content_length: 最小内容长度（避免过短的Chunk）
     :return: 合并后的章节列表
+    本身2000就留有容忍的额度  所以最后一次合并超过2000影响并不大 可以接受
     """
     #1.准备前置的工作
     merged_sections=[]#合并后的章节列表
@@ -167,11 +167,9 @@ def merge_short_sections(sections:List[Dict[str,str]],min_content_length:int)->L
 
          if is_current_short and is_same_parent:#即是短块 又和 本次是同一个父标题
              #合并
-             parent_title=pre_section['parent_title']
              next_content=section['content']
              pre_section['content']=pre_section['content']+"\n\n"+next_content
              pre_section['part']=section['part']
-             
          else:
              #上一次不是短块  或者  这一次和上一次不是同一块
              merged_sections.append(pre_section)
@@ -198,11 +196,11 @@ def refine_chunks(sections:List[Dict[str,str]],max_content_length:int=DEFAULT_MA
 
     #超过的切
     for section in sections:
-        #每个section [content,title,file_title]
+        #每个section [content,title,file_title] 对每个section单独进行处理  
         sub_sections=split_long_section(section,max_content_length)
         #切出来的小块好之前是同一个级别 所以直接添加 没改直接加 改了多个一块加
         final_sections.extend(sub_sections)
-    #补全part和parent_title
+    #补全part和parent_title 因为一开始小于2000的没有part和parent_title
     for section in final_sections:
         section['part'] = section.get('part') or 1
         section['parent_title'] = section.get('parent_title') or section.get('title', '')
